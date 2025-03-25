@@ -363,4 +363,3 @@ with tf.name_scope("otimizacao"):
     gradients = otimizador.compute_gradients(erro)
     clipped_gradients = [(tf.clip_by_value(grad_tensor, -5.0, 5.0), grad_variable) for grad_tensor, grad_variable in gradients if grad_tensor is not None]
     otimizador_clipping = otimizador.apply_gradients(clipped_gradients)
-    
