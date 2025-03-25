@@ -368,8 +368,91 @@ with tf.name_scope("otimizacao"):
     #Olá <PAD><PAD><PAD><PAD>
     #Olá tudo bem?<PAD><PAD>
     #Olá bem e você?
-def aplica_padding(batch_textos, palavras_para_int):
-    tamanho_maximo = max([len(texto) for texto in batch_texto])    
+def aplica_padding(batch_textos, palavra_para_int):
+    tamanho_maximo = max([len(texto) for texto in batch_textos])    
     return [texto + [palavra_para_int['<PAD>']] * (tamanho_maximo - len(texto)) for texto in batch_textos]
-    
 
+#Divisão dos dados em batches de perguntas respostas
+def divide_batches(perguntas, respostas, batch_size):
+    for indice_batch in range (0, len(perguntas) // batch_size):
+        indice_inicio = indice_batch * batch_size
+        perguntas_no_batch = perguntas[indice_inicio:indice_inicio + batch_size]
+        respostas_no_batch = respostas[indice_inicio:indice_inicio + batch_size]
+        perguntas_no_batch_padded = np.array(aplica_padding(perguntas_no_batch,perguntas_palavras_int))
+        respostas_no_batch_padded = np.array(aplica_padding(respostas_no_batch,respostas_palavras_int))
+        yield perguntas_no_batch_padded, respostas_no_batch_padded
+        
+#Divisao das perguntas e respostas em base de treinamento e teste/validacao
+indice_base_validacao = int(len(perguntas_limpas_ordenadas) * 0.15)
+perguntas_treinamento = perguntas_limpas_ordenadas[indice_base_validacao:]
+respostas_treinamento = respostas_limpas_ordenadas[indice_base_validacao:]
+perguntas_validacao = perguntas_limpas_ordenadas[:indice_base_validacao]
+respostas_validacao = respostas_limpas_ordenadas[:indice_base_validacao]
+    
+#Treinamento
+batch_indice_checagem = 100
+batch_indice_checagem_validacao = (len(perguntas_treinamento) // batch_size // 2) - 1
+erro_total_treinamento = 0
+lista_validacao_erro = []
+early_stopping_checagem = 0
+early_stopping_parada = 1000
+checkpoint = "chatbot_pesos.ckpt"
+session.run(tf.global_variables_initializer())
+for epoca in range(1 ,epocas + 1):
+    for indice_batch,(perguntas_no_batch_padded, respostas_no_batch_padded) in enumerate(divide_batches(perguntas_treinamento, respostas_treinamento, batch_size)):
+        tempo_inicio= time.time()
+        _, erro_treinamento_batch = session.run([otimizador_clipping, erro], feed_dict = {entradas: perguntas_no_batch_padded,
+                                                saidas:respostas_no_batch_padded,
+                                                lr: learning_rate,
+                                                tamanho_sequencia: respostas_no_batch_padded.shape[1],
+                                                keep_prob:probabilidade_dropout})
+        erro_total_treinamento += erro_treinamento_batch
+        tempo_final = time.time()
+    tempo_batch = tempo_final = tempo_inicio
+    if indice_batch % batch_indice_checagem_treinamento == 0:
+            print('Época: {:>3}/{}, Batch: {:>4}/{}, Erro treinamento: {:>6.3f}, Tempo treinamento em 100 batches: {:d} segundos'.format(epoca,
+                  epocas,
+                  indice_batch,
+                  len(perguntas_treinamento) // batch_size,
+                  erro_total_treinamento / batch_indice_checagem_treinamento,
+                  int(tempo_batch * batch_indice_checagem_treinamento)))
+        
+    erro_total_treinamento = 0
+        
+    if indice_batch % batch_indice_checagem_validacao == 0 and indice_batch > 0:
+            erro_total_validacao = 0
+            tempo_inicio = time.time()
+            for indice_batch_validacao, (perguntas_no_batch_padded, respostas_no_batch_padded) in enumerate(divide_batches(perguntas_validacao, respostas_validacao, batch_size)):
+                erro_batch_validacao = session.run(erro, feed_dict = {entradas: perguntas_no_batch_padded,
+                                                    saidas: respostas_no_batch_padded, 
+                                                    lr: learning_rate,
+                                                    tamanho_sequencia: respostas_no_batch_padded.shape[1],
+                                                    keep_prob: 1})
+                erro_total_validacao += erro_batch_validacao
+            tempo_final = time.time()
+            tempo_batch = tempo_final - tempo_inicio
+            media_erro_validacao = erro_total_validacao / (len(perguntas_validacao) / batch_size)
+            print('Erro validação: {:>6.3f}, Tempo validação batch: {:d} segundos'.format(media_erro_validacao, int(tempo_batch)))
+            learning_rate *= learning_rate_decaimento
+            if learning_rate < min_learning_rate:
+                learning_rate = min_learning_rate
+            lista_validacao_erro.append(media_erro_validacao)
+            if media_erro_validacao < min(lista_validacao_erro):
+                print('Houve melhoria')
+                early_stopping_checagem = 0
+                saver = tf.train.Saver()
+                saver.save(session, checkpoint)
+            else:
+               print('Eu não consigo falar melhor! Preciso praticar mais')
+               early_stopping_checagem += 1
+               if early_stopping_checagem == early_stopping_parada:
+                   break
+               
+    if early_stopping_checagem == early_stopping_parada:
+        print('Isso é o melhor que eu posso fazer')
+        break
+print('Final')
+        
+        
+        
+        
