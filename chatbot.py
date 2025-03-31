@@ -453,6 +453,46 @@ for epoca in range(1 ,epocas + 1):
         break
 print('Final')
         
-        
-        
-        
+## Teste com o Modelo SEQ2SEQ
+
+##Carregamento dos Pesos e Execução da Seção
+checkpoint = "./chatbot_pesos.ckpt"
+session = tf.InteractiveSession()
+session.run(tf.global_variables_initializer())
+saver.tf.train.Server()
+saver.restore(session, checkpoint)
+
+#Conversão de Questões de String para inteiros
+def converte_string_para_int(pergunta, palavra_para_int):
+    pergunta = limpa_texto(pergunta)
+    return [palavra+para_int.get(palavra, palavra_para_int['<OUT>']) for palavra in pergunta.split()]
+
+converte_string_para_int("i'm a robot", perguntas_palavra_int)
+
+
+#Conversa com chatbot
+while(True):
+    pergunta = input('Você: ')
+    if pegunta == 'Tchau':
+        break
+    pergunta = convert_string_para(pergunta, perguntas_palavra_int)
+    pergunta = pergunta +[perguntas_palavra_int['<PAD>']] * (25-len(pergunta))
+    #[64,25]
+    batch_falso = np.zeros((batch_size, 25))
+    batch_falso[0] = pergunta
+    resposta_prevista = session.run(previsores_teste, feed_dict = {entradas: batch_falso,
+                                                                   keep_prob: 1}) [0]
+    repostas = ''
+    for i in np.argamax(resposta_prevista, 1):
+        if respostas_int_palavras[i] == 'i':
+            token ='I'
+        elif respostas_int_palavras[i] =='<EOS>':
+            token = '.'
+        elif respostas_int_palavras[i] =='<OUT>':
+            token = 'out'
+        else:
+            token =' ' +respostas_int_palavras[i]
+        reposta += token
+        if token == '.':
+            break
+        print('Chatbot: ' + resposta)
